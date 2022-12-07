@@ -7,7 +7,7 @@ $endpoint = "ws://10.0.2.2:8080"
 
 $ws = New-Object Net.WebSockets.ClientWebSocket
 $cancellationTokenSource = New-Object Threading.CancellationTokenSource
-$cancellationToken = New-Object Threading.CancellationToken($false)
+$ByteQueue = New-Object 'System.Collections.Concurrent.ConcurrentQueue[Byte]'
 
 # Call home
 $ws.ConnectAsync($endpoint, $cancellationTokenSource.Token).
@@ -30,35 +30,61 @@ $StartInfo = New-Object System.Diagnostics.ProcessStartInfo -Property @{
 # Define the process itself
 $Process = New-Object System.Diagnostics.Process
 $Process.StartInfo = $StartInfo
+$Process.Start()
+Write-Host -ForegroundColor Green "Started process"
 
-# Helper function to register events for data received
-# writing them to the websocket connection
-function EventTo-WebSocket($EventName) {
-    return Register-ObjectEvent -Action {
-        $cancellationToken = New-Object Threading.CancellationToken($false)
-        # Don't forget to append the newline
-        $line = $Event.SourceEventArgs.Data + "`n"
-        [ArraySegment[byte]] $OutBytes = [Text.Encoding]::UTF8.GetBytes($line)
-        $ws.SendAsync(
-                    $OutBytes,
+$OutRunspace = [PowerShell]::Create()
+$ErrRunspace = [PowerShell]::Create()
+$SendRunspace = [PowerShell]::Create()
+
+$OutRunspace.AddScript({
+    param($Process, $ByteQueue)
+    
+    while ($true) {
+        [Byte]$byte = $Process.StandardOutput.Read()
+        $ByteQueue.Enqueue($byte)
+    }
+}).
+AddParameter("Process",$Process).
+AddParameter("ByteQueue",$ByteQueue).
+BeginInvoke()
+
+$ErrRunspace.AddScript({
+    param($Process, $ByteQueue)
+
+    while ($true) {
+        [Byte]$byte = $Process.StandardError.Read()
+        $ByteQueue.Enqueue($byte)
+    }
+}).
+AddParameter("Process",$Process).
+AddParameter("ByteQueue",$ByteQueue).
+BeginInvoke()
+
+Write-Host -ForegroundColor Green "Started reading streams"
+
+$SendRunspace.AddScript({
+    param($ws, $ByteQueue)
+
+    $byte = $null
+    $cancellationToken = New-Object Threading.CancellationToken($false)
+    while($true) {
+        while ($ByteQueue.TryDequeue([ref] $byte)) {
+            $ByteArray = [ArraySegment[Byte]]::new($byte)
+            $ws.SendAsync(
+                    $ByteArray,
                     [System.Net.WebSockets.WebSocketMessageType]::Binary,
                     $true,
                     $cancellationToken
-        ).GetAwaiter().GetResult()
-    } -InputObject $Process -EventName $EventName
-}
+            ).GetAwaiter().GetResult()
+        }
+    }
+}).
+AddParameter("ws",$ws).
+AddParameter("ByteQueue",$ByteQueue).
+BeginInvoke()
 
-# Register events for stdout and stderr
-$OutEvent = EventTo-WebSocket "OutputDataReceived"
-$ErrEvent = EventTo-WebSocket "ErrorDataReceived"
-Write-Host -ForegroundColor Green "Registered object events for reading stdout and stderr"
-
-[void]$Process.Start()
-Write-Host -ForegroundColor Green "Started process"
-
-$Process.BeginOutputReadLine()
-$Process.BeginErrorReadLine()
-Write-Host -ForegroundColor Green "Started reading streams"
+Write-Host -ForegroundColor Green "Started runspace to forward streams"
 
 # Create a buffer to read from the websocket
 $buffer = [Net.WebSockets.WebSocket]::CreateClientBuffer(1024, 1024)
@@ -70,14 +96,26 @@ while ($ws.State -eq [Net.WebSockets.WebSocketState]::Open) {
 	GetResult()
     $orders = [Text.Encoding]::UTF8.GetString($buffer, 0, $received.Count)
     Write-Host -ForegroundColor Green "Player: $orders"
-    $Process.StandardInput.Write($orders)
+    $Process.StandardInput.WriteLine($orders)
 }
 
-$OutEvent.Name, $ErrEvent.Name | ForEach-Object {Unregister-Event -SourceIdentifier $_}
 $ws.CloseAsync(
     [System.Net.WebSockets.WebSocketCloseStatus]::Empty,
     "",
     $cancellationToken
 ).GetAwaiter().GetResult()
 
+Write-Host -ForegroundColor Red "Closing WebSocket"
+
 $ws.Dispose()
+
+Write-Host -ForegroundColor Red "Stopping runspaces"
+
+$OutRunspace.Stop()
+$OutRunspace.Dispose()
+
+$ErrRunspace.Stop()
+$ErrRunspace.Dispose()
+
+$SendRunspace.Stop()
+$SendRunspace.Dispose()

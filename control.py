@@ -1,10 +1,12 @@
 import asyncio
 import threading
 import websockets
+import time
 
 async def pass_input(ws):
+    time.sleep(1)
     while True:
-        await ws.send(input('') + '\n')
+        await ws.send(input(''))
 
 def thunk(ws):
     asyncio.run(pass_input(ws))
