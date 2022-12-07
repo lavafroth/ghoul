@@ -1,4 +1,5 @@
 ﻿# Credits:
+# https://gist.github.com/byt3bl33d3r/910b3161d54c2d6a3d5e1050c4e1013e
 # https://stackoverflow.com/questions/23239127/powershell-stream-process-output-and-errors-while-running-external-process
 
 # Might wanna change this
