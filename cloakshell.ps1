@@ -86,17 +86,23 @@ BeginInvoke()
 
 Write-Host -ForegroundColor Green "Started runspace to forward streams"
 
-# Create a buffer to read from the websocket
-$buffer = [Net.WebSockets.WebSocket]::CreateClientBuffer(1024, 1024)
+# Kinda sucks that we read one byte at a time but the websocket
+# requires an [ArraySegment[Byte]] to read bytes into it.
+$buffer = [ArraySegment[Byte]]::new(0)
 $cancellationToken = New-Object Threading.CancellationToken($false)
 
 while ($ws.State -eq [Net.WebSockets.WebSocketState]::Open) {
     $received = $ws.ReceiveAsync($buffer, $cancellationToken).
 	GetAwaiter().
 	GetResult()
-    $orders = [Text.Encoding]::UTF8.GetString($buffer, 0, $received.Count)
-    Write-Host -ForegroundColor Green "Player: $orders"
-    $Process.StandardInput.WriteLine($orders)
+    if ($received.Count -eq 1) {
+        [Byte] $b = $buffer.Array[0]
+        if ($b -eq 127) {
+    	    $Process.StandardInput.Write("`b")
+        } else {
+    	    $Process.StandardInput.Write([Char]$b)
+        }
+    }
 }
 
 $ws.CloseAsync(

@@ -2,14 +2,27 @@ import asyncio
 import threading
 import websockets
 import time
+import curses
+
+stdscr = curses.initscr()
+curses.cbreak()
 
 async def pass_input(ws):
-    time.sleep(1)
+    global stdscr
     while True:
-        await ws.send(input(''))
+        try:
+            ch = chr(stdscr.getch())
+            await ws.send(ch)
+        except (KeyboardInterrupt, EOFError):
+            die()
 
 def thunk(ws):
     asyncio.run(pass_input(ws))
+
+def die():
+    curses.nocbreak()
+    curses.endwin()
+    exit(0)
 
 async def handler(ws):
     """
@@ -19,14 +32,16 @@ async def handler(ws):
     thread = threading.Thread(target=thunk, args=(ws,))
     thread.start()
     while True:
-        try:
-            print((await ws.recv()).decode(), end="")
-        except KeyboardInterrupt:
-            print("ok bye")
-            return
+        received = await ws.recv()
+        decoded = received.decode()
+        output = decoded.replace('\n', '\r\n')
+        print(output, end="")
 
 async def main():
     async with websockets.serve(handler, "127.0.0.1", 8080):
         await asyncio.Future()
 
-asyncio.run(main())
+try:
+    asyncio.run(main())
+except KeyboardInterrupt:
+    die()
