@@ -3,9 +3,10 @@ import threading
 import websockets
 import time
 import curses
+import logging
 
-stdscr = curses.initscr()
-curses.cbreak()
+stdscr = None
+logging.basicConfig(encoding='utf-8', level=logging.INFO)
 
 async def pass_input(ws):
     global stdscr
@@ -38,7 +39,11 @@ async def handler(ws):
         print(output, end="")
 
 async def main():
-    async with websockets.serve(handler, "127.0.0.1", 8080):
+    global stdscr
+    host, port = "127.0.0.1", 8080
+    async with websockets.serve(handler, host, port):
+        stdscr = curses.initscr()
+        curses.cbreak()
         await asyncio.Future()
 
 try:
