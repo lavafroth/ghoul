@@ -1,6 +1,8 @@
 # cloakshell
 Powershell reverse shell via WebSockets
 
+### As of December 15, 2022, cloakshell has stopped working on Windows machines. Tested against Windows 10 and 11.
+
 #### Quickstart
 
 On the attacker machine install the dependencies and run the command and control server.
