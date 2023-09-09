@@ -3,7 +3,7 @@
 # https://stackoverflow.com/questions/23239127/powershell-stream-process-output-and-errors-while-running-external-process
 
 # Might wanna change this
-$endpoint = "ws://10.0.2.2:8080"
+$endpoint = "ws://10.0.2.2:42069"
 
 $ws = New-Object Net.WebSockets.ClientWebSocket
 $cancellationTokenSource = New-Object Threading.CancellationTokenSource
