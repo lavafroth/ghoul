@@ -6,6 +6,8 @@ Powershell reverse shell via WebSockets
 > The end user is solely liable for their actions.
 > Read the [license](https://github.com/lavafroth/cloakshell/blob/main/LICENSE) for more details.
 
+![Demo](demo.png)
+
 ### Prerequisites
 
 - [Websocat](https://github.com/vi/websocat) installed
