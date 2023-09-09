@@ -11,7 +11,7 @@ $buffer = [byte[]]::new(4096)
 # Call home
 $ws.ConnectAsync($endpoint, $cancellationTokenSource.Token).
     GetAwaiter().
-    GetResult()
+    GetResult() | Out-Null
 
 Write-Host -ForegroundColor Green "Connected"
 
